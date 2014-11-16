@@ -55,14 +55,12 @@ int maxpool_speed_test(int num, int channels_in, int height_in, int width_in,
     LayerParameter layerParams; 
     layerParams.set_type(LayerParameter_LayerType_POOLING);
 
-    PoolingParameter poolParams;
+    PoolingParameter *poolParams = layerParams.mutable_pooling_param();
     // Max is set by default, but just to be explicit
-    poolParams.set_pool(PoolingParameter_PoolMethod_MAX);
-    poolParams.set_kernel_size(kernelSize);
-    poolParams.set_pad(poolPad); // Need to define poolPad
-    poolParams.set_stride(poolStride);
-
-    layerParams.set_allocated_pooling_param(&poolParams);
+    poolParams->set_pool(PoolingParameter_PoolMethod_MAX);
+    poolParams->set_kernel_size(kernelSize);
+    poolParams->set_pad(poolPad); // Need to define poolPad
+    poolParams->set_stride(poolStride);
 
     PoolingLayer<Dtype> poolLayer(layerParams);
     poolLayer.SetUp(blob_bottom_vec_, &(blob_top_vec_));
