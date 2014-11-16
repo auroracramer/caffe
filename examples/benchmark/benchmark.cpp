@@ -32,12 +32,31 @@ double gflops_to_perform(int num, int channels_in, int height_in, int width_in,
                     int poolPad, int kernelSize, int poolStride, int num_output)
 {
 
-    // TODO: Not correct currently
-    double gflops = ((double)height_in * width_in * channels_in * 
-                     kernelSize * kernelSize * num_output * num * 2) //*2 is for multiply+add
-                     / ((double)poolStride * poolStride * 1e9);
+    double flops = 0.0f;
 
-    return gflops;
+    int pooled_height = static_cast<int>(ceil(static_cast<float>(
+        height_in + 2 * poolPad - kernelSize) / poolStride)) + 1;
+    int pooled_width = static_cast<int>(ceil(static_cast<float>(
+        width_in + 2 * poolPad - kernelSize) / poolStride)) + 1;
+
+    // Calculate flops in a very pro way
+    for (int n = 0; n < num; ++n) {
+      for (int c = 0; c < channels_in; ++c) {
+        for (int ph = 0; ph < pooled_height; ++ph) {
+          for (int pw = 0; pw < pooled_width; ++pw) {
+            int hstart = ph * poolStride - poolPad;
+            int wstart = pw * poolStride - poolPad;
+            int hend = min(hstart + kernelSize, height_in);
+            int wend = min(wstart + kernelSize, width_in);
+            hstart = max(hstart, 0);
+            wstart = max(wstart, 0);
+            flops += (hend - hstart) * (wend - wstart);
+          }
+        }
+      }
+    }
+
+    return flops * 10e-9;
 }
 
 //set up and benchmark layers without actually having a network.
