@@ -592,6 +592,53 @@ TYPED_TEST(PoolingLayerTest, TestGradientAvePadded) {
   }
 }
 
+
+TYPED_TEST(PoolingLayerTest, TestForwardMaxPaddedKernelSizeOne) {
+  typedef typename TypeParam::Dtype Dtype;
+  LayerParameter layer_param;
+  PoolingParameter* pooling_param = layer_param.mutable_pooling_param();
+  pooling_param->set_kernel_size(1);
+  pooling_param->set_stride(1);
+  pooling_param->set_pad(0);
+  pooling_param->set_pool(PoolingParameter_PoolMethod_MAX);
+  this->blob_bottom_->Reshape(1, 1, 3, 3);
+  // Input:
+  //     [ 1 2 4 ]
+  //     [ 2 3 2 ]
+  //     [ 4 2 1 ]
+  this->blob_bottom_->mutable_cpu_data()[0] = 1;
+  this->blob_bottom_->mutable_cpu_data()[1] = 2;
+  this->blob_bottom_->mutable_cpu_data()[2] = 4;
+  this->blob_bottom_->mutable_cpu_data()[3] = 2;
+  this->blob_bottom_->mutable_cpu_data()[4] = 3;
+  this->blob_bottom_->mutable_cpu_data()[5] = 2;
+  this->blob_bottom_->mutable_cpu_data()[6] = 4;
+  this->blob_bottom_->mutable_cpu_data()[7] = 2;
+  this->blob_bottom_->mutable_cpu_data()[8] = 1;
+  PoolingLayer<Dtype> layer(layer_param);
+  layer.SetUp(this->blob_bottom_vec_, &(this->blob_top_vec_));
+  EXPECT_EQ(this->blob_top_->num(), 1);
+  EXPECT_EQ(this->blob_top_->channels(), 1);
+  EXPECT_EQ(this->blob_top_->height(), 3);
+  EXPECT_EQ(this->blob_top_->width(), 3);
+  layer.Forward(this->blob_bottom_vec_, &(this->blob_top_vec_));
+  Dtype epsilon = 1e-8;
+  // Output:
+  //     [ 1 2 4 ]
+  //     [ 2 3 2 ]
+  //     [ 4 2 1 ]
+  EXPECT_NEAR(this->blob_top_->cpu_data()[0], 1, epsilon);
+  EXPECT_NEAR(this->blob_top_->cpu_data()[1], 2, epsilon);
+  EXPECT_NEAR(this->blob_top_->cpu_data()[2], 4, epsilon);
+  EXPECT_NEAR(this->blob_top_->cpu_data()[3], 2, epsilon);
+  EXPECT_NEAR(this->blob_top_->cpu_data()[4], 3, epsilon);
+  EXPECT_NEAR(this->blob_top_->cpu_data()[5], 2, epsilon);
+  EXPECT_NEAR(this->blob_top_->cpu_data()[6], 4, epsilon);
+  EXPECT_NEAR(this->blob_top_->cpu_data()[7], 2, epsilon);
+  EXPECT_NEAR(this->blob_top_->cpu_data()[8], 1, epsilon);
+}
+
+
 #ifdef USE_CUDNN
 template <typename Dtype>
 class CuDNNPoolingLayerTest : public ::testing::Test {

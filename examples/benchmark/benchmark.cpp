@@ -104,39 +104,6 @@ int maxpool_speed_test(int num, int channels_in, int height_in, int width_in,
     return 0; //TODO: return 1 if error?
 }
 
-//mimic alexnet dims, print out perf results.
-void alexnet_speed_test()
-{
-    int NUM_ = 50;
-    
-    // alexnet conv1
-    maxpool_speed_test<float>(NUM_, 3, 227, 227, 
-                           1, 11, 4, 96, "alexnet conv1");
-
-    //pool1: stride=2
-
-    maxpool_speed_test<float>(NUM_, 96, 27, 27,
-                           2, 5, 1, 256, "alexnet conv2");
-
-    //pool2: stride=2
-
-    maxpool_speed_test<float>(NUM_, 256, 13, 13,
-                           1, 3, 1, 384, "alexnet conv3"); //slightly faster than in net_speed_test_forrest (15ms vs 20ms, in GPU mode)
-
-    //there is no pool3
-
-    maxpool_speed_test<float>(NUM_, 384, 13, 13,
-                           2, 3, 1, 384, "alexnet conv4");
-    //there is no pool4
-
-    maxpool_speed_test<float>(NUM_, 384, 13, 13,
-                           2, 3, 1, 256, "alexnet conv5");
-
-    //TODO: sweep the space of kernelSize, stride, channels, num_output, etc.
-
-    LOG(ERROR) << "*** Benchmark ends ***";
-}
-
 // for the configuration below, bigger planes seem to give more gflops/s.
 // inputDim=8 and inputDim=16 both take ~20ms.
 void vary_input_size(){
@@ -146,23 +113,24 @@ void vary_input_size(){
     for(int inputDim = 8; inputDim <= 128; inputDim = inputDim*2){ //out of memory if >=128.
         ostringstream niceName;
         niceName << "inputDim = " << inputDim << ".";
+        LOG(ERROR) << inputDim << "\n";
 
-        maxpool_speed_test<float>(50, 384, inputDim, inputDim,                           
-                               3, 2, 1, 256, niceName.str());
+        maxpool_speed_test<float>(50, 384, inputDim, inputDim,
+                                  3, 2, 1, 256, niceName.str());
         LOG(ERROR) << "running running run";
     }
 }
 
 //3x3 filter is as good as bigger filters in terms of gflops/s (~1700 gflops/s with 55x55 planes.)
-void vary_filter_size(){
+void vary_kernel_size(){
     LOG(ERROR) << "running 'vary filter size'";
-    for(int filterSize=1; filterSize<10; filterSize++) //out of memory if >10
+    for(int kernelSize=1; kernelSize<15; kernelSize++) //out of memory if >10
     { 
         ostringstream niceName;
-        niceName << "filterSize = " << filterSize << ".";
+        niceName << "kernelSize = " << kernelSize << ".";
 
         maxpool_speed_test<float>(50, 384, 55, 55, 
-                               2, filterSize, 1, 256, niceName.str());
+                                  kernelSize, 2, 1, 256, niceName.str());
     }
 }
 
@@ -176,11 +144,6 @@ void vary_channels_in(){
         maxpool_speed_test<float>(50, channels_in, 55, 55, 
                                3, 2, 1, 256, niceName.str());
     }
-/*
-
-int maxpool_speed_test(int num, int channels_in, int height_in, int width_in,
-                    int kernelSize, int poolPad, int poolStride, int num_output, string niceName)
-*/
 }
 
 void vary_batch_size()
@@ -192,20 +155,7 @@ void vary_batch_size()
         niceName << "NUM_ = " << NUM_ << ".";
 
         maxpool_speed_test<float>(NUM_, 384, 55, 55, 
-                               2, 3, 1, 256, niceName.str());
-    }
-}
-
-void vary_num_groups()
-{
-    LOG(ERROR) << "running 'num groups'";
-    for(int group=1; group<=8; group=group*2)
-    { 
-        ostringstream niceName;
-        niceName << "num groups = " << group << ".";
-
-        maxpool_speed_test<float>(50, 384, 55, 55, 
-                               group, 3, 1, 256, niceName.str());
+                                  3, 2, 1, 256, niceName.str());
     }
 }
 
@@ -218,13 +168,7 @@ void vary_num_filters()
         niceName << "num filters = " << num_output << ".";
 
         maxpool_speed_test<float>(50, 384, 55, 55, 
-                               2, 3, 1, num_output, niceName.str());
-
-/*
-
-int maxpool_speed_test(int num, int channels_in, int height_in, int width_in,
-                    int kernelSize, int poolPad, int poolStride, int num_output, string niceName)
-*/
+                                  3, 2, 1, num_output, niceName.str());
     }
 }
 
@@ -235,6 +179,9 @@ int main(int argc, char** argv) {
     Caffe::set_phase(Caffe::TEST);
 
     vary_input_size();
+    vary_channels_in();
+    vary_batch_size();
+    vary_num_filters();
 
     return 0;
 }
