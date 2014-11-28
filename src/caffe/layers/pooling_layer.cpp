@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <vector>
-
+#include <omp.h>
 #include "caffe/common.hpp"
 #include "caffe/layer.hpp"
 #include "caffe/syncedmem.hpp"
@@ -129,6 +129,7 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     }
     caffe_set(top_count, Dtype(-FLT_MAX), top_data);
     // The main loop
+#pragma omp parallel for
     for (int n = 0; n < bottom[0]->num(); ++n) {
       for (int c = 0; c < channels_; ++c) {
         for (int ph = 0; ph < pooled_height_; ++ph) {
@@ -139,16 +140,19 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
             int wend = min(wstart + kernel_w_, width_);
             hstart = max(hstart, 0);
             wstart = max(wstart, 0);
-            const int pool_index = ph * pooled_width_ + pw;
+	    int coord = n * channels_ + c;
+	    int bottom_offset = coord * bottom[0]->offset(0, 1);
+	    int top_offset = coord * (*top)[0]->offset(0, 1);
+	    const int pool_index = ph * pooled_width_ + pw;
             for (int h = hstart; h < hend; ++h) {
               for (int w = wstart; w < wend; ++w) {
                 const int index = h * width_ + w;
-                if (bottom_data[index] > top_data[pool_index]) {
-                  top_data[pool_index] = bottom_data[index];
+                if (bottom_data[bottom_offset + index] > top_data[top_offset + pool_index]) {
+                  top_data[top_offset + pool_index] = bottom_data[bottom_offset + index];
                   if (use_top_mask) {
-                    top_mask[pool_index] = static_cast<Dtype>(index);
+                    top_mask[top_offset + pool_index] = static_cast<Dtype>(index);
                   } else {
-                    mask[pool_index] = index;
+                    mask[top_offset + pool_index] = index;
                   }
                 }
               }
@@ -156,13 +160,16 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
           }
         }
         // compute offset
+	/*
         bottom_data += bottom[0]->offset(0, 1);
+	//std::cout << "Offset: " << bottom[0]->offset(0, 1) << std::endl;
         top_data += (*top)[0]->offset(0, 1);
         if (use_top_mask) {
           top_mask += (*top)[0]->offset(0, 1);
         } else {
           mask += (*top)[0]->offset(0, 1);
         }
+	*/
       }
     }
     break;
