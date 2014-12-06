@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <vector>
+#include <omp.h>
 
 #include "caffe/common.hpp"
 #include "caffe/layer.hpp"
@@ -119,6 +120,9 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   // loop to save time, although this results in more code.
   switch (this->layer_param_.pooling_param().pool()) {
   case PoolingParameter_PoolMethod_MAX:
+  
+    omp_set_num_threads(omp_get_max_threads());
+    
     // Initialize
     if (use_top_mask) {
       top_mask = (*top)[1]->mutable_cpu_data();
@@ -128,8 +132,18 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       caffe_set(top_count, -1, mask);
     }
     caffe_set(top_count, Dtype(-FLT_MAX), top_data);
+    
+    /*printf("Loop parameters --- num: %d --- channels: %d --- pooled height: %d --- pooled width: %d\n",
+      bottom[0]->num(), channels_, pooled_height_, pooled_width_);
+    */
     // The main loop
+    #pragma omp parallel
+    {
+    #pragma omp single
+    {
     for (int n = 0; n < bottom[0]->num(); ++n) {
+      #pragma omp task
+      {
       for (int c = 0; c < channels_; ++c) {
         for (int ph = 0; ph < pooled_height_; ++ph) {
           for (int pw = 0; pw < pooled_width_; ++pw) {
@@ -139,16 +153,18 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
             int wend = min(wstart + kernel_w_, width_);
             hstart = max(hstart, 0);
             wstart = max(wstart, 0);
+	    int bottom_offset = (n * channels_ + c) * bottom[0]->offset(0, 1);
+	    int top_offset = (n * channels_ + c) * (*top)[0]->offset(0, 1);
             const int pool_index = ph * pooled_width_ + pw;
             for (int h = hstart; h < hend; ++h) {
               for (int w = wstart; w < wend; ++w) {
                 const int index = h * width_ + w;
-                if (bottom_data[index] > top_data[pool_index]) {
-                  top_data[pool_index] = bottom_data[index];
+                if (bottom_data[index + bottom_offset] > top_data[pool_index + top_offset]) {
+                  top_data[pool_index + top_offset] = bottom_data[index + bottom_offset];
                   if (use_top_mask) {
-                    top_mask[pool_index] = static_cast<Dtype>(index);
+                    top_mask[pool_index + top_offset] = static_cast<Dtype>(index);
                   } else {
-                    mask[pool_index] = index;
+                    mask[pool_index + top_offset] = index;
                   }
                 }
               }
@@ -156,6 +172,7 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
           }
         }
         // compute offset
+	/*
         bottom_data += bottom[0]->offset(0, 1);
         top_data += (*top)[0]->offset(0, 1);
         if (use_top_mask) {
@@ -163,16 +180,24 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
         } else {
           mask += (*top)[0]->offset(0, 1);
         }
+	*/
       }
+      }
+    }
+    }
     }
     break;
   case PoolingParameter_PoolMethod_AVE:
+#pragma omp parallel for
     for (int i = 0; i < top_count; ++i) {
       top_data[i] = 0;
     }
     // The main loop
+#pragma omp parallel for
     for (int n = 0; n < bottom[0]->num(); ++n) {
       for (int c = 0; c < channels_; ++c) {
+	int bottom_offset = (n * channels_ + c) * bottom[0]->offset(0, 1);
+	int top_offset = (n * channels_ + c) * (*top)[0]->offset(0, 1);
         for (int ph = 0; ph < pooled_height_; ++ph) {
           for (int pw = 0; pw < pooled_width_; ++pw) {
             int hstart = ph * stride_h_ - pad_h_;
@@ -184,18 +209,18 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
             wstart = max(wstart, 0);
             hend = min(hend, height_);
             wend = min(wend, width_);
+	    Dtype sum = top_data[ph * pooled_width_ + pw + top_offset];
             for (int h = hstart; h < hend; ++h) {
               for (int w = wstart; w < wend; ++w) {
-                top_data[ph * pooled_width_ + pw] +=
-                    bottom_data[h * width_ + w];
+		sum += bottom_data[h * width_ + w + bottom_offset];
               }
             }
-            top_data[ph * pooled_width_ + pw] /= pool_size;
+            top_data[ph * pooled_width_ + pw + top_offset] = sum / pool_size;
           }
         }
         // compute offset
-        bottom_data += bottom[0]->offset(0, 1);
-        top_data += (*top)[0]->offset(0, 1);
+        //bottom_data += bottom[0]->offset(0, 1);
+        //top_data += (*top)[0]->offset(0, 1);
       }
     }
     break;
