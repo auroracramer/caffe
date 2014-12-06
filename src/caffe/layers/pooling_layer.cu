@@ -33,7 +33,6 @@ __global__ void MaxPoolForward(const int nthreads, const Dtype* bottom_data,
         //int hend_total = min( min((pbh+1)*pool_block_h, pooled_height )*stride_h - pad_h + kernel_h, height);
 
         //int wstart_total = max(pbw*pool_block_w * stride_w - pad_w, 0);
-
         //int proc_width = min( min((pbw+1)*pool_block_w, pooled_width )*stride_w - pad_w + kernel_h, width) - wstart_total;
 
 
@@ -90,7 +89,7 @@ __global__ void MaxPoolForward(const int nthreads, const Dtype* bottom_data,
             }
         }
 
-        //free(local_bottom_data);
+        //free(local_bottom_data); dbd6e9
     }
 }
 
