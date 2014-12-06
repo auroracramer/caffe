@@ -25,16 +25,37 @@ __global__ void MaxPoolForward(const int nthreads, const Dtype* bottom_data,
         // Calculate the block index for this thread
         int pbw = index % (pool_block_dim_w);
         int pbh = (index / pool_block_dim_w) % pool_block_dim_h;
+        // Calculate the batch index and channel index
+        int c = (index / pool_block_dim_w / pool_block_dim_h) % channels;
+        int n = index / pool_block_dim_w / pool_block_dim_h / channels;
+
+        //int hstart_total = max(pbh*pool_block_h * stride_h - pad_h, 0);
+        //int hend_total = min( min((pbh+1)*pool_block_h, pooled_height )*stride_h - pad_h + kernel_h, height);
+
+        //int wstart_total = max(pbw*pool_block_w * stride_w - pad_w, 0);
+
+        //int proc_width = min( min((pbw+1)*pool_block_w, pooled_width )*stride_w - pad_w + kernel_h, width) - wstart_total;
+
+
+
+        // Make sure we make a new pointer every time, so we don't keep incrementing the same
+        // one!
+        Dtype* input_data = (Dtype*)bottom_data + (n * channels + c) * height * width;
+
+        /*
+        Dtype *local_bottom_data = (Dtype*) malloc(proc_width*(hend_total - hstart_total)*sizeof(Dtype));
+
+        for (int h = hstart_total; h <= hend_total; h++)
+        {
+            memcpy(local_bottom_data + ((h - hstart_total) * proc_width), input_data + (h * width + wstart_total), proc_width * sizeof(Dtype));
+        }
+        */
+
+        int idx_start = (n*channels + c) * pooled_height;
 
         // Loop over the pooling "block"
         for (int pw = pbw*pool_block_w; pw < min((pbw+1)*pool_block_w, pooled_width); pw++) {
             for (int ph = pbh*pool_block_h; ph < min((pbh+1)*pool_block_h, pooled_height); ph++) {
-                // Calculate the batch index and channel index
-                int c = (index / pool_block_dim_w / pool_block_dim_h) % channels;
-                int n = index / pool_block_dim_w / pool_block_dim_h / channels;
-
-                // Calculate the linear array index for the output
-                int idx = ((n*channels + c) * pooled_height + ph) * pooled_width + pw;
 
                 // Calculate the bounds within which we calculate the max
                 int hstart = ph * stride_h - pad_h;
@@ -46,20 +67,17 @@ __global__ void MaxPoolForward(const int nthreads, const Dtype* bottom_data,
                 Dtype maxval = -FLT_MAX;
                 int maxidx = -1;
 
-                // Make sure we make a new pointer every time, so we don't keep incrementing the same
-                // one!
-                Dtype* input_data = (Dtype*)bottom_data + (n * channels + c) * height * width;
-
                 // Find the max in the kernel
                 for (int h = hstart; h < hend; ++h) {
                   for (int w = wstart; w < wend; ++w) {
                     if (input_data[h * width + w] > maxval) {
-                      maxidx = h * width + w;
-                      maxval = input_data[maxidx];
+                      maxval = input_data[h * width + w];
                     }
                   }
                 }
 
+                // Calculate the linear array index for the output
+                int idx = (idx_start + ph) * pooled_width + pw;
                 // Store the max value
                 top_data[idx] = maxval;
 
@@ -71,6 +89,8 @@ __global__ void MaxPoolForward(const int nthreads, const Dtype* bottom_data,
                 }
             }
         }
+
+        //free(local_bottom_data);
     }
 }
 
@@ -191,7 +211,6 @@ void PoolingLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   int* mask = NULL;
   Dtype* top_mask = NULL;
 
-  int num_pools = pooled_height_ * pooled_width_;
   int pooling_block_height = 1;
   int pooling_block_width = 1;
   int pooling_block_dim_height = (pooled_height_ + pooling_block_height - 1) / pooling_block_height;
@@ -200,21 +219,6 @@ void PoolingLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   int num_pool_blocks = pooling_block_dim_height * pooling_block_dim_width;
   int num_groups = num_pool_blocks * bottom[0]->num() * channels_;
 
-  /*
-      std::cout << "Pooled Height:";
-      std::cout << pooled_height_;
-      std::cout << "\n";
-      std::cout << "Pooled Width:";
-      std::cout << pooled_width_;
-      std::cout << "\n";
-      std::cout << "Pooled Block Height:";
-      std::cout << pooling_block_dim_height;
-      std::cout << "\n";
-      std::cout << "Pooled Block Width:";
-      std::cout << pooling_block_dim_width;
-      std::cout << "\n";
-  */
-  
   switch (this->layer_param_.pooling_param().pool()) {
   case PoolingParameter_PoolMethod_MAX:
     if (use_top_mask) {
