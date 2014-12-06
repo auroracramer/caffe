@@ -1,7 +1,7 @@
 # The makefile for caffe. Pretty hacky.
 PROJECT := caffe
 
-CONFIG_FILE := Makefile.config.example
+CONFIG_FILE := Makefile.config
 include $(CONFIG_FILE)
 
 BUILD_DIR_LINK := $(BUILD_DIR)
