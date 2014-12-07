@@ -78,17 +78,17 @@ __global__ void MaxPoolForward(const int nthreads, const Dtype* bottom_data,
         Dtype* input_data = (Dtype*)bottom_data + (n * channels + c) * height * width;
 
         int register_start_w = max(pbw*pool_block_w - pad_w, 0);
-        int register_start_h = max(pbh*pool_block_h- pad_h, 0);
+        int register_start_h = max(pbh*pool_block_h - pad_h, 0);
         int register_end_w = min(min((pbw+1)*pool_block_w, pooled_width) - pad_w + kernel_w, width);
         int register_end_h = min(min((pbh+1)*pool_block_h, pooled_height) - pad_h + kernel_h, height);
         int register_width = register_end_w - register_start_w;
         int register_height = register_end_h - register_height_h;
 
-        Dtype registers[register_end_w - register_start_w][register_end_w - register_start_w];
-
-        for (int i = 0; i < register_width; i++) {
-          for (int j = 0; i < register_height; j++) {
-            registers[i][j] = input_data[register_start_w + i + (register_start_h + j)*width];
+        Dtype registers[12][12];
+         
+        for (int j = 0; i < register_height; j++) {
+          for (int i = 0; i < register_width; i++) {
+            registers[j][i] = input_data[register_start_w + i + (register_start_h + j)*width];
           }
         }
 
@@ -107,14 +107,14 @@ __global__ void MaxPoolForward(const int nthreads, const Dtype* bottom_data,
         int idx_start = (n*channels + c) * pooled_height;
 
         // Loop over the pooling "block"
-        for (int pw = pbw*pool_block_w - register_start_w; pw < register_end_w - kernel_w; pw++) {
-            for (int ph = pbh*pool_block_h - register_start_h; ph < register_end_h - kernel_h; ph++) {
+        for (int pw = pbw*pool_block_w - register_start_w; pw < min((pbw+1)*pool_block_w, pooled_width) - register_start_w; pw++) {
+            for (int ph = pbh*pool_block_h - register_start_h; ph < min((pbh+1)*pool_block_h, pooled_height) - register_start_h; ph++) {
 
                 // Calculate the bounds within which we calculate the max
                 int hstart = ph * stride_h - pad_h;
                 int wstart = pw * stride_w - pad_w;
-                int hend = min(hstart + kernel_h, height);
-                int wend = min(wstart + kernel_w, width);
+                int hend = min(hstart + kernel_h, register_height);
+                int wend = min(wstart + kernel_w, register_width);
                 hstart = max(hstart, 0);
                 wstart = max(wstart, 0);
                 Dtype maxval = -FLT_MAX;
@@ -123,14 +123,15 @@ __global__ void MaxPoolForward(const int nthreads, const Dtype* bottom_data,
                 // Find the max in the kernel
                 for (int h = hstart; h < hend; ++h) {
                   for (int w = wstart; w < wend; ++w) {
-                    if (input_data[h * width + w] > maxval) {
-                      maxval = input_data[h * width + w];
+                    if (registers[h][w] > maxval) {
+                      maxval = registers[h][w];
+                      maxidx = (h + register_start_h) * width + w + register_start_w;
                     }
                   }
                 }
 
                 // Calculate the linear array index for the output
-                int idx = (idx_start + ph) * pooled_width + pw;
+                int idx = (idx_start + register_start_h + ph) * pooled_width + pw + register_start_w;
                 // Store the max value
                 top_data[idx] = maxval;
 
