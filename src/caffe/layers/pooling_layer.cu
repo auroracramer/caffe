@@ -281,7 +281,7 @@ void PoolingLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       mask = max_idx_.mutable_gpu_data();
     }
     // NOLINT_NEXT_LINE(whitespace/operators)
-    if ((stride_h_ == 1) && (stride_w_ == 1)) {
+    if ((stride_h_ == 1) && (stride_w_ == 1) && (kernel_w_ + pooling_block_width - 1 < 13) && (kernel_h_ + pooling_block_height - 1 < 13)) {
       MaxPoolForward<Dtype><<<CAFFE_GET_BLOCKS(num_groups), CAFFE_CUDA_NUM_THREADS>>>(
           num_groups, bottom_data, bottom[0]->num(), channels_,
           height_, width_, pooled_height_, pooled_width_, kernel_h_,
