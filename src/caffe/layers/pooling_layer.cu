@@ -82,11 +82,11 @@ __global__ void MaxPoolForward(const int nthreads, const Dtype* bottom_data,
         int register_end_w = min(min((pbw+1)*pool_block_w, pooled_width) - pad_w + kernel_w, width);
         int register_end_h = min(min((pbh+1)*pool_block_h, pooled_height) - pad_h + kernel_h, height);
         int register_width = register_end_w - register_start_w;
-        int register_height = register_end_h - register_height_h;
+        int register_height = register_end_h - register_start_h;
 
         Dtype registers[12][12];
          
-        for (int j = 0; i < register_height; j++) {
+        for (int j = 0; j < register_height; j++) {
           for (int i = 0; i < register_width; i++) {
             registers[j][i] = input_data[register_start_w + i + (register_start_h + j)*width];
           }
