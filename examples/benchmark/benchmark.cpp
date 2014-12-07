@@ -70,7 +70,7 @@ int maxpool_speed_test(int num, int channels_in, int height_in, int width_in,
     vector<Blob<Dtype>*> blob_top_vec_;
     blob_bottom_vec_.push_back(blob_bottom_); //PoolingLayer likes vectors of blobs.
     blob_top_vec_.push_back(blob_top_);
-
+    Dtype sizecheck = 1;
     LayerParameter layerParams; 
     layerParams.set_type(LayerParameter_LayerType_POOLING);
 
@@ -95,8 +95,9 @@ int maxpool_speed_test(int num, int channels_in, int height_in, int width_in,
     double layerTime = (read_timer() - start)/num_runs; 
     double gflops_performed = gflops_to_perform(num, channels_in, height_in, width_in,
                                                 poolPad, kernelSize, poolStride, num_output);
-    double gflops_per_sec = gflops_performed / layerTime * 1000; //*1000 for ms to sec 
-    LOG(ERROR) << "    " << niceName <<  " forward: " << layerTime << " ms, " << gflops_performed << " gflops ... " << gflops_per_sec << " gflops/sec"; 
+    double gflops_per_sec = gflops_performed / layerTime * 1000; //*1000 for ms to sec
+    double memory_bandwidth_per_sec = (num * channels * height_in * width_in * sizeof(sizecheck) * 10e-9) / layerTime * 1000;
+    LOG(ERROR) << "    " << niceName <<  " forward: " << layerTime << " ms, " << gflops_performed << " gflops ... " << gflops_per_sec << " gflops/sec" << " memory bandwidth" << memory_bandwidth_per_sec << "GB/s"; 
 
     delete blob_bottom_;
     delete blob_top_;
