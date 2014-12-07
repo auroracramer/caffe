@@ -2,7 +2,7 @@
 #include <cfloat>
 #include <vector>
 #include <omp.h>
-
+#include <immintrin.h>
 #include "caffe/common.hpp"
 #include "caffe/layer.hpp"
 #include "caffe/syncedmem.hpp"
@@ -198,23 +198,51 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       for (int c = 0; c < channels_; ++c) {
 	int bottom_offset = (n * channels_ + c) * bottom[0]->offset(0, 1);
 	int top_offset = (n * channels_ + c) * (*top)[0]->offset(0, 1);
-        for (int ph = 0; ph < pooled_height_; ++ph) {
+	for (int ph = 0; ph < pooled_height_; ++ph) {
+	  int hstart = ph * stride_h_ - pad_h_;
+	  int hend = min(hstart + kernel_h_, height_ + pad_h_);
+	  const int hlen = hend - hstart;
+	  hstart = max(hstart, 0);
+	  hend = min(hend, height_);
           for (int pw = 0; pw < pooled_width_; ++pw) {
-            int hstart = ph * stride_h_ - pad_h_;
-            int wstart = pw * stride_w_ - pad_w_;
-            int hend = min(hstart + kernel_h_, height_ + pad_h_);
-            int wend = min(wstart + kernel_w_, width_ + pad_w_);
-            int pool_size = (hend - hstart) * (wend - wstart);
-            hstart = max(hstart, 0);
+	    int wstart = pw * stride_w_ - pad_w_;
+	    int wend = min(wstart + kernel_w_, width_ + pad_w_);
+            int pool_size = hlen * (wend - wstart);
             wstart = max(wstart, 0);
-            hend = min(hend, height_);
             wend = min(wend, width_);
 	    Dtype sum = top_data[ph * pooled_width_ + pw + top_offset];
-            for (int h = hstart; h < hend; ++h) {
-              for (int w = wstart; w < wend; ++w) {
-		sum += bottom_data[h * width_ + w + bottom_offset];
-              }
-            }
+	    if (sizeof(Dtype) == 4) {
+	      int wlimit = wstart + ((wend - wstart) / 8 * 8);
+	      __m256 psum = _mm256_setzero_ps();
+	      for (int h = hstart; h < hend; ++h) {
+		int index = h * width_ + bottom_offset;
+		for (int w = wstart; w < wlimit; w += 8) {
+		  psum = _mm256_add_ps(psum, _mm256_load_ps((float *)&bottom_data[index + w]));
+		}
+		for (int w = wlimit; w < wend; ++w) {
+		  sum += bottom_data[index + w];
+		}
+	      }
+	      float temp[8];
+	      _mm256_store_ps(temp, psum);
+	      sum += temp[0] + temp[1] + temp[2] + temp[3] + \
+		temp[4] + temp[5] + temp[6] + temp[7];
+	    } else {
+	      int wlimit = wstart + ((wend - wstart) / 4 * 4);
+	      __m256d psum = _mm256_setzero_pd();
+	      for (int h = hstart; h < hend; ++h) {
+		int index = h * width_ + bottom_offset;
+		for (int w = wstart; w < wlimit; w += 4) {
+		  psum = _mm256_add_pd(psum, _mm256_load_pd((double *)&bottom_data[index + w]));
+		}
+		for (int w = wlimit; w < wend; ++w) {
+		  sum += bottom_data[index + w];
+		}
+	      }
+	      double temp[4];
+	      _mm256_store_pd(temp, psum);
+	      sum += temp[0] + temp[1] + temp[2] + temp[3];
+	    }
             top_data[ph * pooled_width_ + pw + top_offset] = sum / pool_size;
           }
         }
