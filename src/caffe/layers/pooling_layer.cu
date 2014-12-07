@@ -265,8 +265,8 @@ void PoolingLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   int* mask = NULL;
   Dtype* top_mask = NULL;
 
-  int pooling_block_height = 1;
-  int pooling_block_width = 1;
+  int pooling_block_height = 2;
+  int pooling_block_width = 2;
   int pooling_block_dim_height = (pooled_height_ + pooling_block_height - 1) / pooling_block_height;
   int pooling_block_dim_width = (pooled_width_ + pooling_block_width - 1) / pooling_block_width;
 
