@@ -105,6 +105,7 @@ int maxpool_speed_test(int num, int channels_in, int height_in, int width_in,
 }
 
 // for the configuration below, bigger planes seem to give more gflops/s.
+// A
 // inputDim=8 and inputDim=16 both take ~20ms.
 void vary_input_size(){
     LOG(ERROR) << "running 'vary input size'";
@@ -124,7 +125,7 @@ void vary_input_size(){
 //3x3 filter is as good as bigger filters in terms of gflops/s (~1700 gflops/s with 55x55 planes.)
 void vary_kernel_size(){
     LOG(ERROR) << "running 'vary filter size'";
-    for(int kernelSize=1; kernelSize<15; kernelSize++) //out of memory if >10
+    for(int kernelSize=3; kernelSize<15; kernelSize++) //out of memory if >10
     { 
         ostringstream niceName;
         niceName << "kernelSize = " << kernelSize << ".";
@@ -182,6 +183,7 @@ int main(int argc, char** argv) {
     vary_channels_in();
     vary_batch_size();
     vary_num_filters();
+    vary_kernel_size();
 
     return 0;
 }
