@@ -182,6 +182,7 @@ int main(int argc, char** argv) {
     vary_channels_in();
     vary_batch_size();
     vary_num_filters();
+    vary_kernel_size();
 
     return 0;
 }
