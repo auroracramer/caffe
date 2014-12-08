@@ -52,7 +52,7 @@ __global__ void MaxPoolForward(const int nthreads, const Dtype* bottom_data,
     const int num, const int channels, const int height,
     const int width, const int pooled_height, const int pooled_width,
     const int kernel_h, const int kernel_w, const int stride_h,
-    const int stride_w, const int pad_h, const int pad_w, const int shared_size, Dtype* top_data,
+    const int stride_w, const int pad_h, const int pad_w, Dtype* top_data,
     int* mask, Dtype* top_mask) {
   CUDA_KERNEL_LOOP(index, nthreads) {
 
@@ -107,8 +107,9 @@ __global__ void MaxPoolForward(const int nthreads, const Dtype* bottom_data,
     // channel and single batch item
     for (int h = hstart; h < hend; ++h) {
       for (int w = wstart; w < wend; ++w) {
-        if (bottom_data[h * width + w] > maxval) {
-          maxidx = h * width + w;
+        idx = h*width + w;
+        if (local_buffer[idx] > maxval) {
+          maxidx = idx;
           maxval = local_buffer[maxidx - bottom_idx_offset];
         }
       }
@@ -247,7 +248,7 @@ void PoolingLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     if ((pooled_height_ == 64) && (pooled_width_ == 64))
     {
         //MaxPoolForward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS, CAFFE_CUDA_NUM_THREADS*max(kernel_w_ - stride_w_, kernel_h_ - stride_h_)*sizeof(Dtype)>>>(
-        MaxPoolForward<Dtype><<<(CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
+        MaxPoolForward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS, 64*(16 + kernel_h_ - 1)*sizeof(Dtype)>>>(
             count, bottom_data, bottom[0]->num(), channels_,
             height_, width_, pooled_height_, pooled_width_, kernel_h_,
             kernel_w_, stride_h_, stride_w_, pad_h_, pad_w_, top_data,
