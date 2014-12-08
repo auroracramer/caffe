@@ -130,7 +130,7 @@ void vary_kernel_size(){
         ostringstream niceName;
         niceName << "kernelSize = " << kernelSize << ".";
 
-        maxpool_speed_test<float>(50, 384, 53, 53, 
+        maxpool_speed_test<float>(40, 256, 64, 64, 
                                   kernelSize, 2, 1, 256, niceName.str());
     }
 }
@@ -142,7 +142,7 @@ void vary_channels_in(){
         ostringstream niceName;
         niceName << "channels_in = " << channels_in << ".";
 
-        maxpool_speed_test<float>(50, channels_in, 53, 53, 
+        maxpool_speed_test<float>(40, channels_in, 64, 64, 
                                3, 2, 1, 256, niceName.str());
     }
 }
@@ -155,7 +155,7 @@ void vary_batch_size()
         ostringstream niceName;
         niceName << "NUM_ = " << NUM_ << ".";
 
-        maxpool_speed_test<float>(NUM_, 384, 53, 53, 
+        maxpool_speed_test<float>(NUM_, 256, 64, 64, 
                                   3, 2, 1, 256, niceName.str());
     }
 }
@@ -168,7 +168,7 @@ void vary_num_filters()
         ostringstream niceName;
         niceName << "num filters = " << num_output << ".";
 
-        maxpool_speed_test<float>(50, 384, 53, 53, 
+        maxpool_speed_test<float>(40, 256, 64, 64, 
                                   3, 2, 1, num_output, niceName.str());
     }
 }
@@ -180,9 +180,9 @@ int main(int argc, char** argv) {
     Caffe::set_phase(Caffe::TEST);
 
     //vary_input_size();
-    vary_channels_in();
-    vary_batch_size();
-    vary_num_filters();
+    //vary_channels_in();
+    //vary_batch_size();
+    //vary_num_filters();
     vary_kernel_size();
 
     return 0;
