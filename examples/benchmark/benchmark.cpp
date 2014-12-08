@@ -135,6 +135,18 @@ void vary_kernel_size(){
     }
 }
 
+void vary_kernel_size_B(){
+    LOG(ERROR) << "running 'vary filter size'";
+    for(int kernelSize=3; kernelSize<15; kernelSize++) //out of memory if >10
+    { 
+        ostringstream niceName;
+        niceName << "kernelSize = " << kernelSize << ".";
+
+        maxpool_speed_test<float>(40, 256, 64 - 5 + kernelSize, 64 - 5 + kernelSize, 
+                                  kernelSize, 2, 1, 256, niceName.str());
+    }
+}
+
 void vary_channels_in(){
     LOG(ERROR) << "running 'num input channels'";
     for(int channels_in=4; channels_in <= 2048; channels_in=channels_in*2) //
@@ -183,7 +195,7 @@ int main(int argc, char** argv) {
     //vary_channels_in();
     //vary_batch_size();
     //vary_num_filters();
-    vary_kernel_size();
+    vary_kernel_size_B();
 
     return 0;
 }
