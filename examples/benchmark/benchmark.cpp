@@ -122,15 +122,15 @@ void vary_input_size(){
     }
 }
 
-//3x3 filter is as good as bigger filters in terms of gflops/s (~1700 gflops/s with 55x55 planes.)
+//3x3 filter is as good as bigger filters in terms of gflops/s (~1700 gflops/s with 256x256 planes.)
 void vary_kernel_size(){
     LOG(ERROR) << "running 'vary filter size'";
-    for(int kernelSize=1; kernelSize<15; kernelSize++) //out of memory if >10
+    for(int kernelSize=3; kernelSize<15; kernelSize++) //out of memory if >10
     { 
         ostringstream niceName;
         niceName << "kernelSize = " << kernelSize << ".";
 
-        maxpool_speed_test<float>(50, 384, 55, 55, 
+        maxpool_speed_test<float>(50, 384, 53, 53, 
                                   kernelSize, 2, 1, 256, niceName.str());
     }
 }
@@ -142,7 +142,7 @@ void vary_channels_in(){
         ostringstream niceName;
         niceName << "channels_in = " << channels_in << ".";
 
-        maxpool_speed_test<float>(50, channels_in, 55, 55, 
+        maxpool_speed_test<float>(50, channels_in, 53, 53, 
                                3, 2, 1, 256, niceName.str());
     }
 }
@@ -155,7 +155,7 @@ void vary_batch_size()
         ostringstream niceName;
         niceName << "NUM_ = " << NUM_ << ".";
 
-        maxpool_speed_test<float>(NUM_, 384, 55, 55, 
+        maxpool_speed_test<float>(NUM_, 384, 53, 53, 
                                   3, 2, 1, 256, niceName.str());
     }
 }
@@ -168,7 +168,7 @@ void vary_num_filters()
         ostringstream niceName;
         niceName << "num filters = " << num_output << ".";
 
-        maxpool_speed_test<float>(50, 384, 55, 55, 
+        maxpool_speed_test<float>(50, 384, 53, 53, 
                                   3, 2, 1, num_output, niceName.str());
     }
 }
@@ -179,10 +179,11 @@ int main(int argc, char** argv) {
     Caffe::set_mode(Caffe::GPU);
     Caffe::set_phase(Caffe::TEST);
 
-    vary_input_size();
+    //vary_input_size();
     vary_channels_in();
     vary_batch_size();
     vary_num_filters();
+    vary_kernel_size();
 
     return 0;
 }
