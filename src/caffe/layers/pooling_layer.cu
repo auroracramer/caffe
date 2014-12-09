@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <cfloat>
 #include <vector>
-#include <iostream>
 
 #include "caffe/layer.hpp"
 #include "caffe/util/math_functions.hpp"
@@ -10,7 +9,7 @@
 namespace caffe {
 
 template <typename Dtype>
-__global__ void BasicMaxPoolForward(const int nthreads, const Dtype* bottom_data,
+__global__ void MaxPoolForward(const int nthreads, const Dtype* bottom_data,
     const int num, const int channels, const int height,
     const int width, const int pooled_height, const int pooled_width,
     const int kernel_h, const int kernel_w, const int stride_h,
@@ -35,82 +34,6 @@ __global__ void BasicMaxPoolForward(const int nthreads, const Dtype* bottom_data
         if (bottom_data[h * width + w] > maxval) {
           maxidx = h * width + w;
           maxval = bottom_data[maxidx];
-        }
-      }
-    }
-    top_data[index] = maxval;
-    if (mask) {
-      mask[index] = maxidx;
-    } else {
-      top_mask[index] = maxidx;
-    }
-  }
-}
-
-template <typename Dtype>
-__global__ void MaxPoolForward(const int nthreads, const Dtype* bottom_data,
-    const int num, const int channels, const int height,
-    const int width, const int pooled_height, const int pooled_width,
-    const int kernel_h, const int kernel_w, const int stride_h,
-    const int stride_w, const int pad_h, const int pad_w, Dtype* top_data,
-    int* mask, Dtype* top_mask) {
-  CUDA_KERNEL_LOOP(index, nthreads) {
-
-    extern __shared__ float local_buffer[];
-
-    int c = (index / pooled_width / pooled_height) % channels;
-    int n = index / pooled_width / pooled_height / channels;
-
-    // Calculate bounds:
-    int idx_start = blockIdx.x * blockDim.x;
-    int idx_end = idx_start + blockDim.x - 1;
-
-    int bottom_idx_offset = max(((idx_start / pooled_width) % pooled_height) * stride_h - pad_h, 0) * width + max((idx_start % pooled_width) * stride_w - pad_w, 0);
-    int bottom_idx_len = min(((idx_end / pooled_width) % pooled_height) * stride_h - pad_h, height) * width + min((idx_end % pooled_width) * stride_w - pad_w, width) - bottom_idx_offset;
-
-
-    bottom_data += (n * channels + c) * height * width;
-    /*
-    if (bottom_idx_len > blockDim.x)
-    {
-        if (threadIdx.x < bottom_idx_len)
-        {
-            local_buffer[threadIdx.x] = bottom_data[bottom_idx_len + threadIdx.x];    
-        }
-
-    } else
-    {
-    */
-    for (int i = (bottom_idx_len/blockDim.x) * threadIdx.x; i < min(static_cast<int>((bottom_idx_len/blockDim.x) * (threadIdx.x + 1)), height*width); ++i)
-    {
-      local_buffer[i] = bottom_data[bottom_idx_len + i];
-    }
-    /*
-    }
-    */
-
-    __syncthreads();
-
-    
-    int pw = index % pooled_width;
-    int ph = (index / pooled_width) % pooled_height;
-    int hstart = ph * stride_h - pad_h;
-    int wstart = pw * stride_w - pad_w;
-    int hend = min(hstart + kernel_h, height);
-    int wend = min(wstart + kernel_w, width);
-    hstart = max(hstart, 0);
-    wstart = max(wstart, 0);
-    Dtype maxval = -FLT_MAX;
-    int maxidx = -1;
-    int idx = 0;
-    // Assume that the dimensions are divisible by 1024, such that we are using a single
-    // channel and single batch item
-    for (int h = hstart; h < hend; ++h) {
-      for (int w = wstart; w < wend; ++w) {
-        idx = h*width + w;
-        if (local_buffer[idx - bottom_idx_offset] > maxval) {
-          maxidx = idx;
-          maxval = local_buffer[maxidx - bottom_idx_offset];
         }
       }
     }
@@ -245,33 +168,11 @@ void PoolingLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       mask = max_idx_.mutable_gpu_data();
     }
     // NOLINT_NEXT_LINE(whitespace/operators)
-    if ((pooled_height_ == 64) && (pooled_width_ == 64) & (sizeof(Dtype) == 4))
-    {
-        //MaxPoolForward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS, CAFFE_CUDA_NUM_THREADS*max(kernel_w_ - stride_w_, kernel_h_ - stride_h_)*sizeof(Dtype)>>>(
-        MaxPoolForward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS, 64*(16 + kernel_h_ - 1)*sizeof(Dtype)>>>(
-            count, bottom_data, bottom[0]->num(), channels_,
-            height_, width_, pooled_height_, pooled_width_, kernel_h_,
-            kernel_w_, stride_h_, stride_w_, pad_h_, pad_w_, top_data,
-            mask, top_mask);
-    } else
-    {
-        std::cout << "Pooled Height " << pooled_height_;
-        std::cout << "\n";
-        std::cout << "Pooled Width " << pooled_width_;
-        std::cout << "\n";
-        std::cout << "Warps " << CAFFE_CUDA_NUM_THREADS/32;
-        std::cout << "\n";
-        std::cout << "Count " << count << std::endl;
-        std::cout << "Kernel Height " << kernel_h_ <<  std::endl;
-        std::cout << "Padding Height " << pad_h_ <<  std::endl;
-
-        //exit(-1);
-        BasicMaxPoolForward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
-            count, bottom_data, bottom[0]->num(), channels_,
-            height_, width_, pooled_height_, pooled_width_, kernel_h_,
-            kernel_w_, stride_h_, stride_w_, pad_h_, pad_w_, top_data,
-            mask, top_mask);
-    }
+    MaxPoolForward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
+        count, bottom_data, bottom[0]->num(), channels_,
+        height_, width_, pooled_height_, pooled_width_, kernel_h_,
+        kernel_w_, stride_h_, stride_w_, pad_h_, pad_w_, top_data,
+        mask, top_mask);
     break;
   case PoolingParameter_PoolMethod_AVE:
     // NOLINT_NEXT_LINE(whitespace/operators)

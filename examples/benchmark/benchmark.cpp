@@ -97,7 +97,7 @@ int maxpool_speed_test(int num, int channels_in, int height_in, int width_in,
                                                 poolPad, kernelSize, poolStride, num_output);
     double gflops_per_sec = gflops_performed / layerTime * 1000; //*1000 for ms to sec
     double memory_bandwidth_per_sec = (num * channels_in * height_in * width_in * sizeof(sizecheck) * 10e-9) / layerTime * 1000;
-    LOG(ERROR) << "    " << niceName <<  " forward: " << layerTime << " ms, " << gflops_performed << " gflops ... " << gflops_per_sec << " gflops/sec" << " memory bandwidth" << memory_bandwidth_per_sec << "GB/s"; 
+    LOG(ERROR) << "    " << niceName <<  " forward: " << layerTime << " ms, " << gflops_performed << " gflops ... " << gflops_per_sec << " gflops/sec" << " memory bandwidth: " << memory_bandwidth_per_sec << "GB/s"; 
 
     delete blob_bottom_;
     delete blob_top_;
@@ -122,6 +122,27 @@ void vary_input_size(){
     }
 }
 
+void vary_for_max_pooling(){
+    LOG(ERROR) << "running 'vary filter size'";
+    for(int kernelSize=6; kernelSize<20; kernelSize++) //out of memory if >10
+    { 
+        for(int channels_in=4; channels_in <= 2048; channels_in=channels_in*2) //
+        { 
+            LOG(ERROR) << "running 'num batch size'";
+            for(int NUM_=30; NUM_<45; NUM_+=4)
+            { 
+                ostringstream niceName;
+                niceName << "kernelSize = " << kernelSize << ".";
+                niceName << "channels_in = " << channels_in << ".";
+                niceName << "NUM_ = " << NUM_ << ".";
+
+                maxpool_speed_test<float>(NUM_, channels_in, 64 - 5 + kernelSize, 64 - 5 + kernelSize, 
+                                          kernelSize, 2, 1, 256, niceName.str());
+            }
+        }
+    }
+}
+
 //3x3 filter is as good as bigger filters in terms of gflops/s (~1700 gflops/s with 256x256 planes.)
 void vary_kernel_size(){
     LOG(ERROR) << "running 'vary filter size'";
@@ -137,7 +158,7 @@ void vary_kernel_size(){
 
 void vary_kernel_size_B(){
     LOG(ERROR) << "running 'vary filter size'";
-    for(int kernelSize=3; kernelSize<15; kernelSize++) //out of memory if >10
+    for(int kernelSize=3; kernelSize<20; kernelSize++) //out of memory if >10
     { 
         ostringstream niceName;
         niceName << "kernelSize = " << kernelSize << ".";
@@ -159,6 +180,18 @@ void vary_channels_in(){
     }
 }
 
+void vary_channels_in_B(){
+    LOG(ERROR) << "running 'num input channels'";
+    for(int channels_in=4; channels_in <= 2048; channels_in=channels_in*2) //
+    { 
+        ostringstream niceName;
+        niceName << "channels_in = " << channels_in << ".";
+
+        maxpool_speed_test<float>(40, channels_in, 64, 64, 
+                               5, 2, 1, 256, niceName.str());
+    }
+}
+
 void vary_batch_size()
 {
     LOG(ERROR) << "running 'num batch size'";
@@ -171,6 +204,20 @@ void vary_batch_size()
                                   3, 2, 1, 256, niceName.str());
     }
 }
+
+void vary_batch_size_B()
+{
+    LOG(ERROR) << "running 'num batch size'";
+    for(int NUM_=1; NUM_<60; NUM_+=4)
+    { 
+        ostringstream niceName;
+        niceName << "NUM_ = " << NUM_ << ".";
+
+        maxpool_speed_test<float>(NUM_, 256, 64, 64, 
+                                  5, 2, 1, 256, niceName.str());
+    }
+}
+
 
 void vary_num_filters()
 {
@@ -195,7 +242,10 @@ int main(int argc, char** argv) {
     //vary_channels_in();
     //vary_batch_size();
     //vary_num_filters();
+    vary_channels_in_B();
+    vary_batch_size_B();
     vary_kernel_size_B();
+    //vary_for_max_pooling();
 
     return 0;
 }
