@@ -56,13 +56,13 @@ void ReLULayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       _mm_store_ps((float *)top_data+i, _mm_add_ps(_mm_max_ps(bottom0,zero), 
         _mm_mul_ps(_mm_set1_ps(negative_slope), _mm_min_ps (bottom0, zero))));
       __m128 bottom1 = _mm_load_ps((const float *) bottom_data+i+4);
-      _mm_store_ps((float *)top_data+i, _mm_add_ps(_mm_max_ps(bottom0,zero), 
+      _mm_store_ps((float *)top_data+i+4, _mm_add_ps(_mm_max_ps(bottom0,zero), 
         _mm_mul_ps(_mm_set1_ps(negative_slope), _mm_min_ps (bottom0, zero))));
       __m128 bottom2 = _mm_load_ps((const float *) bottom_data+i+8);
-      _mm_store_ps((float *)top_data+i, _mm_add_ps(_mm_max_ps(bottom0,zero), 
+      _mm_store_ps((float *)top_data+i+8, _mm_add_ps(_mm_max_ps(bottom0,zero), 
         _mm_mul_ps(_mm_set1_ps(negative_slope), _mm_min_ps (bottom0, zero))));
       __m128 bottom3 = _mm_load_ps((const float *) bottom_data+i+12);
-      _mm_store_ps((float *)top_data+i, _mm_add_ps(_mm_max_ps(bottom0,zero), 
+      _mm_store_ps((float *)top_data+i+12, _mm_add_ps(_mm_max_ps(bottom0,zero), 
         _mm_mul_ps(_mm_set1_ps(negative_slope), _mm_min_ps (bottom0, zero))));
     }
   }
