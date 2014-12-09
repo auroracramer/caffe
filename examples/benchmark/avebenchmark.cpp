@@ -61,7 +61,7 @@ double gflops_to_perform(int num, int channels_in, int height_in, int width_in,
 
 //set up and benchmark layers without actually having a network.
 template<typename Dtype>
-int maxpool_speed_test(int num, int channels_in, int height_in, int width_in,
+int avepool_speed_test(int num, int channels_in, int height_in, int width_in,
                     int kernelSize, int poolPad, int poolStride, int num_output, string niceName)
 {
     Blob<Dtype>* blob_bottom_ = new Blob<Dtype>(num, channels_in, height_in, width_in);
@@ -75,8 +75,8 @@ int maxpool_speed_test(int num, int channels_in, int height_in, int width_in,
     layerParams.set_type(LayerParameter_LayerType_POOLING);
 
     PoolingParameter *poolParams = layerParams.mutable_pooling_param();
-    // Max is set by default, but just to be explicit
-    poolParams->set_pool(PoolingParameter_PoolMethod_MAX);
+    // ave is set by default, but just to be explicit
+    poolParams->set_pool(PoolingParameter_PoolMethod_AVE);
     poolParams->set_kernel_size(kernelSize);
     poolParams->set_pad(poolPad); // Need to define poolPad
     poolParams->set_stride(poolStride);
@@ -116,13 +116,13 @@ void vary_input_size(){
         niceName << "inputDim = " << inputDim << ".";
         LOG(ERROR) << inputDim << "\n";
 
-        maxpool_speed_test<float>(50, 384, inputDim, inputDim,
+        avepool_speed_test<float>(50, 384, inputDim, inputDim,
                                   3, 2, 1, 256, niceName.str());
         LOG(ERROR) << "running running run";
     }
 }
 
-void vary_for_max_pooling(){
+void vary_for_ave_pooling(){
     LOG(ERROR) << "running 'vary filter size'";
     for(int kernelSize=6; kernelSize<20; kernelSize++) //out of memory if >10
     { 
@@ -136,7 +136,7 @@ void vary_for_max_pooling(){
                 niceName << "channels_in = " << channels_in << ".";
                 niceName << "NUM_ = " << NUM_ << ".";
 
-                maxpool_speed_test<float>(NUM_, channels_in, 64 - 5 + kernelSize, 64 - 5 + kernelSize, 
+                avepool_speed_test<float>(NUM_, channels_in, 64 - 5 + kernelSize, 64 - 5 + kernelSize, 
                                           kernelSize, 2, 1, 256, niceName.str());
             }
         }
@@ -151,7 +151,7 @@ void vary_kernel_size(){
         ostringstream niceName;
         niceName << "kernelSize = " << kernelSize << ".";
 
-        maxpool_speed_test<float>(40, 256, 64, 64, 
+        avepool_speed_test<float>(40, 256, 64, 64, 
                                   kernelSize, 2, 1, 256, niceName.str());
     }
 }
@@ -163,7 +163,7 @@ void vary_kernel_size_B(){
         ostringstream niceName;
         niceName << "kernelSize = " << kernelSize << ".";
 
-        maxpool_speed_test<float>(40, 256, 64 - 5 + kernelSize, 64 - 5 + kernelSize, 
+        avepool_speed_test<float>(40, 256, 64 - 5 + kernelSize, 64 - 5 + kernelSize, 
                                   kernelSize, 2, 1, 256, niceName.str());
     }
 }
@@ -175,7 +175,7 @@ void vary_channels_in(){
         ostringstream niceName;
         niceName << "channels_in = " << channels_in << ".";
 
-        maxpool_speed_test<float>(40, channels_in, 64, 64, 
+        avepool_speed_test<float>(40, channels_in, 64, 64, 
                                3, 2, 1, 256, niceName.str());
     }
 }
@@ -187,7 +187,7 @@ void vary_channels_in_B(){
         ostringstream niceName;
         niceName << "channels_in = " << channels_in << ".";
 
-        maxpool_speed_test<float>(40, channels_in, 64, 64, 
+        avepool_speed_test<float>(40, channels_in, 64, 64, 
                                5, 2, 1, 256, niceName.str());
     }
 }
@@ -200,7 +200,7 @@ void vary_batch_size()
         ostringstream niceName;
         niceName << "NUM_ = " << NUM_ << ".";
 
-        maxpool_speed_test<float>(NUM_, 256, 64, 64, 
+        avepool_speed_test<float>(NUM_, 256, 64, 64, 
                                   3, 2, 1, 256, niceName.str());
     }
 }
@@ -213,7 +213,7 @@ void vary_batch_size_B()
         ostringstream niceName;
         niceName << "NUM_ = " << NUM_ << ".";
 
-        maxpool_speed_test<float>(NUM_, 256, 64, 64, 
+        avepool_speed_test<float>(NUM_, 256, 64, 64, 
                                   5, 2, 1, 256, niceName.str());
     }
 }
@@ -227,7 +227,7 @@ void vary_num_filters()
         ostringstream niceName;
         niceName << "num filters = " << num_output << ".";
 
-        maxpool_speed_test<float>(40, 256, 64, 64, 
+        avepool_speed_test<float>(40, 256, 64, 64, 
                                   3, 2, 1, num_output, niceName.str());
     }
 }
@@ -245,7 +245,7 @@ int main(int argc, char** argv) {
     //vary_channels_in_B();
     //vary_batch_size_B();
     vary_kernel_size_B();
-    //vary_for_max_pooling();
+    //vary_for_ave_pooling();
 
     return 0;
 }
