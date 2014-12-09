@@ -120,71 +120,188 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   // loop to save time, although this results in more code.
   switch (this->layer_param_.pooling_param().pool()) {
   case PoolingParameter_PoolMethod_MAX:
-  
-    omp_set_num_threads(omp_get_max_threads());
-    
-    // Initialize
-    if (use_top_mask) {
-      top_mask = (*top)[1]->mutable_cpu_data();
-      caffe_set(top_count, Dtype(-1), top_mask);
-    } else {
-      mask = max_idx_.mutable_cpu_data();
-      caffe_set(top_count, -1, mask);
-    }
-    caffe_set(top_count, Dtype(-FLT_MAX), top_data);
-    
-    /*printf("Loop parameters --- num: %d --- channels: %d --- pooled height: %d --- pooled width: %d\n",
-      bottom[0]->num(), channels_, pooled_height_, pooled_width_);
-    */
-    // The main loop
-    #pragma omp parallel
-    {
-    #pragma omp single
-    {
-    for (int n = 0; n < bottom[0]->num(); ++n) {
-      #pragma omp task
-      {
-      for (int c = 0; c < channels_; ++c) {
-        for (int ph = 0; ph < pooled_height_; ++ph) {
-          for (int pw = 0; pw < pooled_width_; ++pw) {
-            int hstart = ph * stride_h_ - pad_h_;
-            int wstart = pw * stride_w_ - pad_w_;
-            int hend = min(hstart + kernel_h_, height_);
-            int wend = min(wstart + kernel_w_, width_);
-            hstart = max(hstart, 0);
-            wstart = max(wstart, 0);
-	    int bottom_offset = (n * channels_ + c) * bottom[0]->offset(0, 1);
-	    int top_offset = (n * channels_ + c) * (*top)[0]->offset(0, 1);
-            const int pool_index = ph * pooled_width_ + pw;
-            for (int h = hstart; h < hend; ++h) {
-              for (int w = wstart; w < wend; ++w) {
-                const int index = h * width_ + w;
-                if (bottom_data[index + bottom_offset] > top_data[pool_index + top_offset]) {
-                  top_data[pool_index + top_offset] = bottom_data[index + bottom_offset];
-                  if (use_top_mask) {
-                    top_mask[pool_index + top_offset] = static_cast<Dtype>(index);
-                  } else {
-                    mask[pool_index + top_offset] = index;
-                  }
+    if(sizeof(Dtype) == sizeof(double)) {
+      // Initialize
+      if (use_top_mask) {
+        top_mask = (*top)[1]->mutable_cpu_data();
+        caffe_set(top_count, Dtype(-1), top_mask);
+      } else {
+        mask = max_idx_.mutable_cpu_data();
+        caffe_set(top_count, -1, mask);
+      }
+      caffe_set(top_count, Dtype(-FLT_MAX), top_data);
+      
+      omp_set_num_threads(omp_get_max_threads());
+      
+      // The main loop
+      #pragma omp parallel for collapse(2) schedule(dynamic)
+      for (int n = 0; n < bottom[0]->num(); ++n) {
+        for (int c = 0; c < channels_; ++c) {
+          __m256d max_val, max_ind, v1, v1_ind, v2;
+          double result[8];
+          int top_offset = (n * channels_ + c) * (*top)[0]->offset(0, 1);
+          int bottom_offset = (n * channels_ + c) * bottom[0]->offset(0, 1);
+          for (int ph = 0; ph < pooled_height_; ++ph) {
+            for (int pw = 0; pw < pooled_width_; ++pw) {
+              max_val = _mm256_set1_pd(-DBL_MAX);
+              max_ind = _mm256_setzero_pd();
+              float curr_max = -DBL_MAX;
+              int curr_ind = -1;
+              
+              const int pool_index = ph * pooled_width_ + pw;
+              int hstart = ph * stride_h_ - pad_h_;
+              int wstart = pw * stride_w_ - pad_w_;
+              int hend = min(hstart + kernel_h_, height_);
+              int wend = min(wstart + kernel_w_, width_);
+              hstart = max(hstart, 0);
+              wstart = max(wstart, 0);
+              int index = hstart * width_ + wstart;
+              
+              for (int h = hstart; h < hend; ++h) {
+                int w = wstart;
+                for (; w < wend - 3; w+=4) {
+                  v1 = _mm256_loadu_pd((const double*)&bottom_data[bottom_offset + index]);
+                  v1_ind = _mm256_set_pd(index + 3, index + 2, index + 1, index);
+                  
+                  // Holds 0xFFFFFFFFFFFFFFFF when max[i] > v1[i]
+                  v2 = _mm256_cmp_pd(max_val, v1, _CMP_GT_OS);
+                  
+                  max_val = _mm256_max_pd(max_val, v1);
+                  max_ind = _mm256_or_pd(_mm256_and_pd(v2, max_ind), _mm256_andnot_pd(v2, v1_ind));
+                  
+                  index += 4;
                 }
+                for(; w < wend; ++w) {
+                  if(bottom_data[index + bottom_offset] > curr_max) {
+                    curr_max = bottom_data[index + bottom_offset];
+                    curr_ind = index;
+                  }
+                  ++index;
+                }
+                index = index - wend + wstart + width_;
+              }
+              v1 = _mm256_permute2f128_pd(max_val, max_val, _MM_SHUFFLE(0, 1, 0, 1));
+              v1_ind = _mm256_permute2f128_pd(max_ind, max_ind, _MM_SHUFFLE(0, 1, 0, 1));
+              v2 = _mm256_cmp_pd(max_val, v1, _CMP_GT_OS);
+              max_val = _mm256_max_pd(max_val, v1);
+              max_ind = _mm256_or_pd(_mm256_and_pd(v2, max_ind), _mm256_andnot_pd(v2, v1_ind));
+              
+              _mm256_storeu_pd(result, max_val);
+              _mm256_storeu_pd(result + 4, max_ind);
+              
+              if(result[0] > curr_max) {
+                curr_max = result[0];
+                curr_ind = result[4];
+              }
+              if(result[1] > curr_max) {
+                curr_max = result[1];
+                curr_ind = result[5];
+              }
+              top_data[top_offset + pool_index] = curr_max;
+              if (use_top_mask) {
+                top_mask[top_offset + pool_index] = static_cast<Dtype>(curr_ind);
+              } else {
+                mask[top_offset + pool_index] = curr_ind;
               }
             }
           }
         }
-        // compute offset
-	/*
-        bottom_data += bottom[0]->offset(0, 1);
-        top_data += (*top)[0]->offset(0, 1);
-        if (use_top_mask) {
-          top_mask += (*top)[0]->offset(0, 1);
-        } else {
-          mask += (*top)[0]->offset(0, 1);
+      }
+    } else if(sizeof(Dtype) == sizeof(float)) {
+      // Initialize
+      if (use_top_mask) {
+        top_mask = (*top)[1]->mutable_cpu_data();
+        caffe_set(top_count, Dtype(-1), top_mask);
+      } else {
+        mask = max_idx_.mutable_cpu_data();
+        caffe_set(top_count, -1, mask);
+      }
+      caffe_set(top_count, Dtype(-FLT_MAX), top_data);
+      omp_set_num_threads(omp_get_max_threads());
+      
+      // The main loop
+      #pragma omp parallel for collapse(2) schedule(dynamic)
+      for (int n = 0; n < bottom[0]->num(); ++n) {
+        for (int c = 0; c < channels_; ++c) {
+          __m256 max_val, max_ind, v1, v1_ind, v2;
+          float result[16];
+          int top_offset = (n * channels_ + c) * (*top)[0]->offset(0, 1);
+          int bottom_offset = (n * channels_ + c) * bottom[0]->offset(0, 1);
+          for (int ph = 0; ph < pooled_height_; ++ph) {
+            for (int pw = 0; pw < pooled_width_; ++pw) {
+              // Reset SIMD vectors
+              max_val = _mm256_set1_ps(-FLT_MAX);
+              max_ind = _mm256_setzero_ps();
+              float curr_max = -FLT_MAX;
+              int curr_ind = -1;
+              
+              const int pool_index = ph * pooled_width_ + pw;
+              int hstart = ph * stride_h_ - pad_h_;
+              int wstart = pw * stride_w_ - pad_w_;
+              int hend = min(hstart + kernel_h_, height_);
+              int wend = min(wstart + kernel_w_, width_);
+              hstart = max(hstart, 0);
+              wstart = max(wstart, 0);
+              int index = hstart * width_ + wstart;
+              
+              for (int h = hstart; h < hend; ++h) {
+                int w = wstart;
+                for (; w < wend - 7; w+=8) {
+                  v1 = _mm256_loadu_ps((const float*)&bottom_data[bottom_offset + index]);
+                  v1_ind = _mm256_set_ps(index + 7, index + 6, index + 5, index + 4,index + 3, index + 2, index + 1, index);
+                  
+                  // Holds 0xFFFFFFFF when max[i] > v1[i]
+                  v2 = _mm256_cmp_ps(max_val, v1, _CMP_GT_OS);
+                  
+                  max_val = _mm256_max_ps(max_val, v1);
+                  max_ind = _mm256_or_ps(_mm256_and_ps(v2, max_ind), _mm256_andnot_ps(v2, v1_ind));
+                  
+                  index += 8;
+                }
+                for(; w < wend; ++w) {
+                  if(bottom_data[index + bottom_offset] > curr_max) {
+                    curr_max = bottom_data[index + bottom_offset];
+                    curr_ind = index;
+                  }
+                  ++index;
+                }
+                index = index - wend + wstart + width_;
+              }
+              v1 = _mm256_permute2f128_ps(max_val, max_val, _MM_SHUFFLE(0, 1, 0, 1));
+              v1_ind = _mm256_permute2f128_ps(max_ind, max_ind, _MM_SHUFFLE(0, 1, 0, 1));
+              v2 = _mm256_cmp_ps(max_val, v1, _CMP_GT_OS);
+              max_val = _mm256_max_ps(max_val, v1);
+              max_ind = _mm256_or_ps(_mm256_and_ps(v2, max_ind), _mm256_andnot_ps(v2, v1_ind));
+              
+              _mm256_storeu_ps(result, max_val);
+              _mm256_storeu_ps(result + 8, max_ind);
+              
+              if(result[0] > curr_max) {
+                curr_max = result[0];
+                curr_ind = result[8];
+              }
+              if(result[1] > curr_max) {
+                curr_max = result[1];
+                curr_ind = result[9];
+              }
+              if(result[2] > curr_max) {
+                curr_max = result[2];
+                curr_ind = result[10];
+              }
+              if(result[3] > curr_max) {
+                curr_max = result[3];
+                curr_ind = result[11];
+              }
+              top_data[top_offset + pool_index] = curr_max;
+              if (use_top_mask) {
+                top_mask[top_offset + pool_index] = static_cast<Dtype>(curr_ind);
+              } else {
+                mask[top_offset + pool_index] = curr_ind;
+              }
+            }
+          }
         }
-	*/
       }
-      }
-    }
-    }
     }
     break;
   case PoolingParameter_PoolMethod_AVE:
